@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,14 @@ func scanPort(host string, port uint16, timeout time.Duration, openPortChan chan
 	openPortChan <- port
 }
 
+func openPortProcessor(openPortChannel chan uint16) {
+	for port := range openPortChannel {
+		if port != 0 {
+			fmt.Printf("%d port is open\n", port)
+		}
+	}
+}
+
 func main() {
 	host := flag.String("host", "127.0.0.1", "hostname to scan")
 	timeout := flag.Uint("timeout", 100, "timeout for connection establishment")
@@ -36,30 +45,23 @@ func main() {
 
 	fmt.Printf("Scanning host %s\n", *host)
 
-	portsToScan := 0
-	openPortChannel := make(chan uint16)
-
+	openPortChannel := make(chan uint16, conf.concurrentPortCount)
 	limiter := make(chan int, conf.concurrentPortCount)
+
+	go openPortProcessor(openPortChannel)
+
+	var wg sync.WaitGroup
 
 	// First 1024 ports are reserved anyway
 	for i := 1025; i < math.MaxUint16; i++ {
 		limiter <- 1
+		wg.Add(1)
 		go func(host string, port uint16, timeout time.Duration, openPortChannel chan uint16) {
-			scanPort(host, uint16(i), conf.timeout, openPortChannel)
+			scanPort(host, port, conf.timeout, openPortChannel)
 			<-limiter
+			wg.Done()
 		}(*host, uint16(i), conf.timeout, openPortChannel)
-		portsToScan += 1
 	}
 
-	scannedCount := 0
-
-	for port := range openPortChannel {
-		scannedCount += 1
-		if port != 0 {
-			fmt.Printf("Port %d is open\n", port)
-		}
-		if scannedCount == portsToScan {
-			break
-		}
-	}
+	wg.Wait()
 }
