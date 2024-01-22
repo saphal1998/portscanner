@@ -3,25 +3,30 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"net"
-	"os"
 )
+
+func scanPort(host string, port int) bool {
+	_, err := net.Dial("tcp", fmt.Sprintf("%s:%d", host, port))
+	if err != nil {
+		return false
+	}
+	return true
+}
 
 func main() {
 	host := flag.String("host", "127.0.0.1", "hostname to scan")
-	port := flag.Int("port", 8080, "port to check")
-
 	flag.Parse()
 
-	fmt.Printf("Host %s, Port: %d\n", *host, *port)
+	fmt.Printf("Scanning host %s\n", *host)
 
-	_, err := net.Dial("tcp", fmt.Sprintf("%s:%d", *host, *port))
-	if err != nil {
-		fmt.Println("Port is closed")
-		os.Exit(1)
+	for i := 0; i < math.MaxUint16; i++ {
+		result := scanPort(*host, i)
+
+		if result {
+			fmt.Printf("Port %d is open\n", i)
+		}
 	}
-
-	fmt.Printf("Port %d is open", *port)
-	os.Exit(0)
 
 }
